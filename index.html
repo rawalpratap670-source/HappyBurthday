@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>🎂 Happy Birthday Samikshya! 🎉</title>
+    <title>🎂 Happy Birthday 🎉</title>
     <!-- Google Fonts for Elegant Typography -->
     <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600;700;900&family=Poppins:wght@300;400;500;600&display=swap" rel="stylesheet">
     <style>
@@ -186,7 +186,7 @@
             opacity: 0.7;
         }
 
-        /* Candles - moved down (reduced top value) */
+        /* Candles - moved down */
         .candles {
             position: absolute;
             top: -55px;
@@ -440,6 +440,11 @@
         .reload-note {
             display: none;
         }
+        
+        /* Audio unlock indicator (hidden) */
+        .audio-ready {
+            display: none;
+        }
     </style>
 </head>
 <body>
@@ -471,13 +476,14 @@
     <div class="music-toggle" id="musicToggleBtn">🎵</div>
 
     <script>
-        // ========== HAPPY BIRTHDAY SONG (Increased Volume) ==========
+        // ========== HAPPY BIRTHDAY SONG - MOBILE FIXED ==========
+        // Using Web Audio API with user interaction handling for mobile
+        
         let audioCtx = null;
-        let isMusicPlaying = false;
-        let musicNodes = [];
-        let musicInterval = null;
-        let currentNoteIndex = 0;
+        let isSongPlaying = false;
         let songTimeout = null;
+        let currentNoteIndex = 0;
+        let audioUnlocked = false;
         
         // Happy Birthday melody notes (frequencies in Hz)
         const melodyNotes = [
@@ -520,26 +526,49 @@
             audioCtx = new (window.AudioContext || window.webkitAudioContext)();
         }
         
-        function playHappyBirthdaySong() {
-            if (!audioCtx) initAudio();
-            if (isMusicPlaying) return;
-            
-            if (audioCtx.state === 'suspended') {
+        // Function to unlock audio on mobile (must be called from user gesture)
+        function unlockAudio() {
+            if (audioUnlocked) return;
+            if (!audioCtx) {
+                initAudio();
+            }
+            if (audioCtx && audioCtx.state === 'suspended') {
                 audioCtx.resume().then(() => {
-                    startMelody();
-                }).catch(e => console.log("Audio resume error", e));
-            } else {
-                startMelody();
+                    audioUnlocked = true;
+                    console.log("🎵 Audio unlocked for mobile!");
+                }).catch(e => console.log("Audio unlock error:", e));
+            } else if (audioCtx && audioCtx.state === 'running') {
+                audioUnlocked = true;
             }
         }
         
+        // Play the Happy Birthday song
+        function playHappyBirthdaySong() {
+            if (!audioCtx) {
+                initAudio();
+            }
+            
+            // Important: On mobile, we need to ensure audio context is running
+            if (audioCtx.state === 'suspended') {
+                audioCtx.resume().then(() => {
+                    startMelody();
+                }).catch(e => console.log("Could not resume audio:", e));
+                return;
+            }
+            
+            if (isSongPlaying) return;
+            startMelody();
+        }
+        
         function startMelody() {
-            if (isMusicPlaying) return;
-            isMusicPlaying = true;
+            if (isSongPlaying) return;
+            if (!audioCtx) return;
+            
+            isSongPlaying = true;
             currentNoteIndex = 0;
             
             function playNextNote() {
-                if (!isMusicPlaying || currentNoteIndex >= melodyNotes.length) {
+                if (!isSongPlaying || currentNoteIndex >= melodyNotes.length) {
                     stopSong();
                     return;
                 }
@@ -552,8 +581,8 @@
                 const gainNode = audioCtx.createGain();
                 osc.type = 'sine';
                 osc.frequency.value = freq;
-                // INCREASED VOLUME from 0.25 to 0.45
-                gainNode.gain.value = 0.45;
+                // Volume increased to 0.5 for better mobile experience
+                gainNode.gain.value = 0.5;
                 gainNode.gain.exponentialRampToValueAtTime(0.0001, now + duration - 0.08);
                 osc.connect(gainNode);
                 gainNode.connect(audioCtx.destination);
@@ -574,25 +603,29 @@
                 clearTimeout(songTimeout);
                 songTimeout = null;
             }
-            isMusicPlaying = false;
+            isSongPlaying = false;
             currentNoteIndex = 0;
-        }
-        
-        function stopMusic() {
-            if (!isMusicPlaying) return;
-            stopSong();
-            if (audioCtx) {
-                musicNodes.forEach(node => {
-                    try { node.stop && node.stop(); } catch(e) {}
-                });
-                musicNodes = [];
-            }
         }
         
         function toggleMusic() {
             if (!audioCtx) initAudio();
-            if (isMusicPlaying) {
-                stopMusic();
+            
+            // Unlock audio first if needed
+            if (audioCtx.state === 'suspended') {
+                audioCtx.resume().then(() => {
+                    if (!isSongPlaying) {
+                        playHappyBirthdaySong();
+                        document.getElementById('musicToggleBtn').innerHTML = '🎶';
+                    } else {
+                        stopSong();
+                        document.getElementById('musicToggleBtn').innerHTML = '🎵';
+                    }
+                });
+                return;
+            }
+            
+            if (isSongPlaying) {
+                stopSong();
                 document.getElementById('musicToggleBtn').innerHTML = '🎵';
             } else {
                 playHappyBirthdaySong();
@@ -661,10 +694,17 @@
             // Remove hint immediately
             removeHint();
             
-            // Play Happy Birthday song with increased volume
-            playHappyBirthdaySong();
-            // Update music button icon
-            document.getElementById('musicToggleBtn').innerHTML = '🎶';
+            // IMPORTANT: Unlock audio for mobile before playing
+            if (audioCtx && audioCtx.state === 'suspended') {
+                audioCtx.resume().then(() => {
+                    playHappyBirthdaySong();
+                    document.getElementById('musicToggleBtn').innerHTML = '🎶';
+                }).catch(e => console.log("Audio resume failed:", e));
+            } else {
+                // Play Happy Birthday song with increased volume
+                playHappyBirthdaySong();
+                document.getElementById('musicToggleBtn').innerHTML = '🎶';
+            }
             
             const container = document.getElementById('mainContainer');
             const flames = document.querySelectorAll('.flame');
@@ -769,30 +809,48 @@
         const mainContainer = document.getElementById('mainContainer');
         const blowHandler = (e) => {
             e.preventDefault();
+            // Unlock audio on first interaction (important for mobile)
+            if (audioCtx && audioCtx.state === 'suspended') {
+                audioCtx.resume().catch(e => console.log("resume error"));
+            }
             if (!blown) blowCandles();
         };
         mainContainer.addEventListener('click', blowHandler);
         mainContainer.addEventListener('touchstart', blowHandler, {passive: false});
         
-        // Music toggle
+        // Music toggle button
         const musicBtn = document.getElementById('musicToggleBtn');
         musicBtn.addEventListener('click', (e) => {
             e.stopPropagation();
             toggleMusic();
         });
         
-        // First user interaction - enable audio context auto
-        document.body.addEventListener('click', () => {
-            if (audioCtx && audioCtx.state === 'suspended') {
-                audioCtx.resume();
+        // Pre-initialize audio context on any user interaction to unlock mobile audio
+        function preUnlockAudio() {
+            if (!audioCtx) {
+                initAudio();
             }
-        }, { once: true });
+            if (audioCtx && audioCtx.state === 'suspended') {
+                audioCtx.resume().then(() => {
+                    console.log("✅ Mobile audio unlocked!");
+                    audioUnlocked = true;
+                }).catch(e => console.log("Pre-unlock failed", e));
+            }
+            // Remove listener after first interaction
+            document.body.removeEventListener('touchstart', preUnlockAudio);
+            document.body.removeEventListener('click', preUnlockAudio);
+        }
+        
+        // Add listeners to unlock audio on first touch/click (mobile requirement)
+        document.body.addEventListener('touchstart', preUnlockAudio);
+        document.body.addEventListener('click', preUnlockAudio);
         
         // initialize all premium assets
         createRomanticBackground();
         createPremiumStars();
         
         console.log("🎂 Birthday Experience — Tap the cake to blow candles & celebrate Samikshya! 🎂");
+        console.log("📱 Mobile audio: Will unlock on first tap");
     </script>
 </body>
 </html>
